@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Knit Pixel Art Tool</title>
+    <style>
+        /* --- GLOBAL --- */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #121212; color: #e0e0e0;
+            height: 100vh;
+            display: flex; flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* --- HEADER (TOP) --- */
+        .top-bar {
+            background: #1e1e1e;
+            padding: 10px 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            z-index: 10;
+            display: flex; gap: 20px; align-items: center;
+            flex-shrink: 0;
+        }
+        .logo { font-size: 1.2em; font-weight: bold; color: #00ECFE; margin-right: 20px; }
+        
+        .control-group { display: flex; gap: 10px; align-items: center; padding-right: 20px; border-right: 1px solid #333; }
+        .control-group:last-child { border-right: none; }
+
+        .btn {
+            padding: 6px 12px; border: none; border-radius: 4px;
+            font-weight: 600; cursor: pointer; transition: 0.2s; white-space: nowrap; font-size: 0.9em;
+        }
+        .btn-primary { background: #00ECFE; color: #000; }
+        .btn-primary:hover { background: #00c7d6; }
+        .btn-secondary { background: #333; color: #fff; }
+        .btn-secondary:hover { background: #444; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        input[type="file"] { color: #aaa; font-size: 0.9em; width: 180px; }
+        
+        .palette-dropdown { display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; width: 200px; }
+        .palette-color { width: 18px; height: 18px; border: none; cursor: pointer; border-radius: 2px; padding: 0; }
+
+        /* --- WORKSPACE --- */
+        .workspace-container {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2px;
+            background: #000;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .panel {
+            position: relative;
+            background-color: #0f0f0f;
+            overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+        
+        .panel-header {
+            position: absolute; top: 10px; left: 10px;
+            background: rgba(0,0,0,0.7); color: #00ECFE;
+            padding: 5px 10px; border-radius: 4px;
+            font-size: 0.8em; font-weight: bold;
+            z-index: 5; pointer-events: none;
+            border: 1px solid #333;
+        }
+
+        /* Left Panel */
+        .viewport-frame {
+            width: 100%; height: 100%;
+            cursor: crosshair;
+            background-image:
+                linear-gradient(45deg, #1a1a1a 25%, transparent 25%),
+                linear-gradient(-45deg, #1a1a1a 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #1a1a1a 75%),
+                linear-gradient(-45deg, transparent 75%, #1a1a1a 75%);
+            background-size: 20px 20px;
+        }
+        .workspace {
+            position: absolute; top: 0; left: 0;
+            transform-origin: 0 0; will-change: transform;
+            image-rendering: pixelated;
+        }
+        .workspace img { display: block; pointer-events: none; user-select: none; }
+        .workspace canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+        /* Right Panel */
+        #rightPanel {
+            background: #0a0a0a;
+            display: flex; align-items: center; justify-content: center;
+            border-left: 1px solid #333;
+            padding: 20px;
+        }
+        
+        #resultImage {
+            width: 100%; height: 100%;
+            object-fit: contain;
+            image-rendering: pixelated;
+            filter: drop-shadow(0 0 10px rgba(0,0,0,0.5));
+            display: none;
+        }
+
+        .placeholder-text { color: #444; font-size: 1.2em; text-align: center; }
+
+        /* --- BOTTOM BAR --- */
+        .bottom-bar {
+            background: #1e1e1e;
+            padding: 10px 20px;
+            border-top: 1px solid #333;
+            display: flex; justify-content: space-between; align-items: center;
+            flex-shrink: 0;
+            height: 60px;
+        }
+        
+        .stats-area { font-size: 0.9em; color: #aaa; display: flex; gap: 20px; align-items: center; }
+        .stat-item strong { color: #fff; }
+        
+        .loading-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: none; justify-content: center; align-items: center;
+            z-index: 100; color: #00ECFE; font-size: 1.5em; flex-direction: column;
+        }
+
+        /* --- MODAL STATS --- */
+        .modal {
+            display: none; position: fixed; z-index: 1000;
+            left: 0; top: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            backdrop-filter: blur(5px);
+        }
+        .modal-content {
+            background-color: #1e1e1e;
+            margin: 5% auto; padding: 20px;
+            border: 1px solid #333; border-radius: 8px;
+            width: 80%; max-width: 800px;
+            box-shadow: 0 5px 30px rgba(0,0,0,0.5);
+            max-height: 80vh; display: flex; flex-direction: column;
+        }
+        .modal-header {
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid #333; padding-bottom: 15px; margin-bottom: 15px;
+        }
+        .modal-header h2 { color: #00ECFE; margin: 0; }
+        .close-btn { color: #aaa; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close-btn:hover { color: #fff; }
+        
+        .modal-body { overflow-y: auto; flex: 1; }
+        
+        /* Stats Table */
+        table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+        th { text-align: left; padding: 10px; border-bottom: 2px solid #333; color: #888; text-transform: uppercase; position: sticky; top: 0; background: #1e1e1e; }
+        td { padding: 8px 10px; border-bottom: 1px solid #2a2a2a; }
+        tr:hover { background: rgba(255,255,255,0.05); }
+        .color-dot { width: 24px; height: 24px; border-radius: 4px; display: inline-block; vertical-align: middle; border: 1px solid #555; }
+    </style>
+</head>
+<body>
+
+    <div class="top-bar">
+        <div class="logo">KnitPixel
+            ArtTool 🧶 </div>
+        
+        <div class="control-group">
+            <input type="file" id="imageInput" accept="image/*">
+            <button class="btn btn-secondary" onclick="resetView()" title="Reset Zoom">👁️</button>
+            <button class="btn btn-secondary" id="detectGridBtn" disabled onclick="detectGridAuto()">🔍 Auto Detect</button>
+        </div>
+
+        <div class="control-group">
+            <div style="display:flex; flex-direction:column; gap:2px;">
+                <label style="font-size:0.8em; color:#aaa; cursor:pointer;">
+                    <input type="checkbox" id="usePaletteCheckbox" checked onchange="togglePaletteOptions()">
+                    Áp dụng Palette (tối đa <span id="targetKVal" style="color:#00ECFE">2</span> màu)
+                </label>
+                <input type="range" id="targetKInput" min="2" max="10" value="2" 
+                       style="width: 140px; height: 4px;" 
+                       oninput="document.getElementById('targetKVal').innerText = this.value">
+            </div>
+        </div>
+
+        <div class="control-group" id="customPaletteGroup">
+            <div class="palette-dropdown" id="paletteGrid"></div>
+        </div>
+
+        <div style="background: rgba(255, 255, 255, 0.05); padding: 12px; border-radius: 6px; margin-bottom: 20px; font-size: 0.9em; color: #ccc; border-left: 3px solid #FF8100;">
+            💡<strong>Giữ chuột phải kéo</strong> để di chuyển ảnh • <strong>Chuột trái kéo</strong> để chọn ô mẫu • <strong>Lăn chuột</strong> để Zoom • <strong>Ctrl + Lăn</strong> để cuộn dọc.
+        </div>
+
+        <div style="flex:1"></div>
+        <button class="btn btn-primary" id="processBtn" disabled onclick="processImage()">🚀 CHUYỂN ĐỔI</button>
+    </div>
+
+    <div class="workspace-container">
+        
+        <div class="panel">
+            <div class="panel-header">ẢNH GỐC (Editor)</div>
+            <div class="viewport-frame" id="viewport">
+                <div class="workspace" id="workspace">
+                    <img id="sourceImage" src="" alt="">
+                    <canvas id="selectionCanvas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" id="rightPanel">
+            <div class="panel-header">KẾT QUẢ</div>
+            <div class="placeholder-text" id="resultPlaceholder">
+                Bấm "Chuyển đổi" để xem kết quả<br>
+                <small>(Kết quả sẽ hiện ở đây)</small>
+            </div>
+            <img id="resultImage" src="">
+            <div class="loading-overlay" id="loading">
+                <div>⏳</div>
+                <div style="font-size:0.6em; margin-top:10px;">Đang xử lý thuật toán...</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bottom-bar">
+        <div class="stats-area" id="statsArea">
+            <span class="stat-item">Zoom: <strong id="zoomVal">100%</strong></span>
+            <span class="stat-item">Ô: <strong id="cellVal">-</strong></span>
+            <span class="stat-item">Lưới: <strong id="gridVal">-</strong></span>
+            <span class="stat-item" style="color:#00FF00" id="statusVal">Sẵn sàng</span>
+            <button class="btn btn-secondary" id="viewStatsBtn" disabled onclick="openStatsModal()" style="margin-left: 20px;">📊 Xem Thống Kê</button>
+        </div>
+
+        <div style="display:flex; gap:10px;" id="downloadArea">
+            <button class="btn btn-secondary" disabled id="dlFullBtn">⬇️ Ảnh Full</button>
+            <button class="btn btn-secondary" disabled id="dlPxBtn">⬇️ Ảnh Pixel</button>
+        </div>
+    </div>
+
+    <div id="statsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📊 Thống kê màu sắc</h2>
+                <span class="close-btn" onclick="closeStatsModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom: 15px; display: flex; justify-content: space-between; font-size: 1.1em;">
+                    <span>Tổng số pixel: <strong id="totalPixels" style="color: #fff;">-</strong></span>
+                    <span>Số màu sử dụng: <strong id="uniqueColors" style="color: #00ECFE;">-</strong></span>
+                </div>
+                <div id="colorStatsTableContainer">
+                    </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // --- VARIABLES ---
+    const viewport = document.getElementById('viewport');
+    const workspace = document.getElementById('workspace');
+    const imgElement = document.getElementById('sourceImage');
+    const canvas = document.getElementById('selectionCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    let view = { x: 0, y: 0, scale: 1, isPanning: false, isDragging: false, lastX: 0, lastY: 0 };
+    let selection = { active: false, startX: 0, startY: 0, rect: null };
+    
+    const DEFAULT_PALETTE = [
+        "#FF90A7", "#EE444A", "#FFE201", "#FF8100", "#8F56FE",
+        "#F443E0", "#00DA00", "#00B587", "#148EFF", "#00ECFE",
+        "#E0E1EB", "#FED495", "#39414B", "#77422A", "#966E46",
+        "#441b6d", "#718d24", "#403dc9", "#849ca8", "#efad29"
+    ];
+
+    renderPaletteGrid(DEFAULT_PALETTE);
+
+    // --- RENDER LOOP ---
+    function render() {
+        workspace.style.transform = `translate3d(${view.x}px, ${view.y}px, 0) scale(${view.scale})`;
+        document.getElementById('zoomVal').innerText = Math.round(view.scale * 100) + "%";
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (selection.rect) {
+            const { x, y, w, h } = selection.rect;
+            ctx.fillStyle = 'rgba(0, 236, 254, 0.2)';
+            ctx.fillRect(x, y, w, h);
+            ctx.lineWidth = 1 / view.scale;
+            ctx.strokeStyle = '#00ECFE';
+            ctx.setLineDash([4/view.scale, 2/view.scale]);
+            ctx.strokeRect(x, y, w, h);
+        }
+        requestAnimationFrame(render);
+    }
+    render();
+
+    // --- PALETTE UI ---
+    function renderPaletteGrid(colors) {
+        const grid = document.getElementById('paletteGrid');
+        grid.innerHTML = '';
+        colors.forEach(c => {
+            const input = document.createElement('input');
+            input.type = 'color'; input.value = c; input.className = 'palette-color';
+            grid.appendChild(input);
+        });
+    }
+    function getPalette() { return Array.from(document.querySelectorAll('.palette-color')).map(i => i.value); }
+    function togglePaletteOptions() {
+        const chk = document.getElementById('usePaletteCheckbox').checked;
+        const opacity = chk ? '1' : '0.3';
+        const pointer = chk ? 'auto' : 'none';
+        document.getElementById('customPaletteGroup').style.opacity = opacity;
+        document.getElementById('customPaletteGroup').style.pointerEvents = pointer;
+        document.getElementById('targetKInput').disabled = !chk;
+    }
+
+    // --- MODAL UI ---
+    function openStatsModal() { document.getElementById('statsModal').style.display = 'block'; }
+    function closeStatsModal() { document.getElementById('statsModal').style.display = 'none'; }
+    window.onclick = function(event) {
+        if (event.target == document.getElementById('statsModal')) closeStatsModal();
+    }
+
+    // --- INPUT HANDLING ---
+    document.getElementById('imageInput').addEventListener('change', e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        imgElement.onload = () => {
+            canvas.width = imgElement.naturalWidth;
+            canvas.height = imgElement.naturalHeight;
+            resetView();
+            document.getElementById('detectGridBtn').disabled = false;
+            document.getElementById('statusVal').innerText = "Đã tải ảnh";
+            document.getElementById('resultImage').style.display = 'none';
+            document.getElementById('resultPlaceholder').style.display = 'block';
+            document.getElementById('viewStatsBtn').disabled = true;
+        };
+        imgElement.src = URL.createObjectURL(file);
+    });
+
+    function resetView() {
+        const vw = viewport.clientWidth, vh = viewport.clientHeight;
+        const iw = imgElement.naturalWidth, ih = imgElement.naturalHeight;
+        if(!iw) return;
+        view.scale = Math.min((vw-20)/iw, (vh-20)/ih);
+        view.x = (vw - iw*view.scale)/2;
+        view.y = (vh - ih*view.scale)/2;
+        selection.rect = null;
+    }
+
+    // --- MOUSE ---
+    viewport.addEventListener('mousedown', e => {
+        e.preventDefault();
+        if(e.button === 0) { selection.active = true; const p = getImgPos(e); selection.startX = p.x; selection.startY = p.y; selection.rect = null; }
+        else if(e.button === 2) { view.isDragging = true; view.lastX = e.clientX; view.lastY = e.clientY; }
+    });
+    window.addEventListener('mousemove', e => {
+        if(view.isDragging) { view.x += e.clientX - view.lastX; view.y += e.clientY - view.lastY; view.lastX = e.clientX; view.lastY = e.clientY; }
+        else if(selection.active) { const p = getImgPos(e); const w = Math.abs(p.x - selection.startX); const h = Math.abs(p.y - selection.startY); selection.rect = { x: Math.min(p.x, selection.startX), y: Math.min(p.y, selection.startY), w, h }; }
+    });
+    window.addEventListener('mouseup', () => { view.isDragging = false; if(selection.active) { selection.active = false; updateInfo(); } });
+    viewport.addEventListener('contextmenu', e => e.preventDefault());
+    viewport.addEventListener('wheel', e => {
+        e.preventDefault();
+        const rect = viewport.getBoundingClientRect();
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        const ix = (mx - view.x) / view.scale, iy = (my - view.y) / view.scale;
+        if (!e.ctrlKey) { const factor = e.deltaY < 0 ? 1.1 : 0.9; view.scale = Math.max(0.05, Math.min(50, view.scale * factor)); view.x = mx - ix * view.scale; view.y = my - iy * view.scale; }
+        else { view.x -= e.deltaX; view.y -= e.deltaY; }
+    }, {passive:false});
+
+    function getImgPos(e) {
+        const rect = viewport.getBoundingClientRect();
+        return { x: Math.max(0, Math.min(imgElement.naturalWidth, (e.clientX - rect.left - view.x) / view.scale)), y: Math.max(0, Math.min(imgElement.naturalHeight, (e.clientY - rect.top - view.y) / view.scale)) };
+    }
+
+    function updateInfo() {
+        const btn = document.getElementById('processBtn');
+        if(selection.rect && selection.rect.w > 0) {
+            const w = Math.round(selection.rect.w), h = Math.round(selection.rect.h);
+            document.getElementById('cellVal').innerText = `${w} x ${h} px`;
+            const cols = Math.round(imgElement.naturalWidth/w);
+            const rows = Math.round(imgElement.naturalHeight/h);
+            document.getElementById('gridVal').innerText = `${cols} x ${rows}`;
+            btn.disabled = false;
+        } else { btn.disabled = true; }
+    }
+
+    // --- API ---
+    async function detectGridAuto() {
+        const file = document.getElementById('imageInput').files[0];
+        if(!file) return;
+        const btn = document.getElementById('detectGridBtn');
+        btn.disabled = true; btn.innerText = "⏳...";
+        const fd = new FormData(); fd.append('file', file);
+        try {
+            const res = await fetch('/detect-grid', {method:'POST', body:fd});
+            const data = await res.json();
+            if(data.error) throw new Error(data.error);
+            selection.rect = { x: 0, y: 0, w: data.cell_width, h: data.cell_height };
+            updateInfo();
+            document.getElementById('statusVal').innerText = `Detected (${data.method})`;
+        } catch(e) { alert(e.message); } finally { btn.disabled = false; btn.innerText = "🔍 Auto Detect"; }
+    }
+
+    async function processImage() {
+        if(!selection.rect) return;
+        const btn = document.getElementById('processBtn');
+        const loader = document.getElementById('loading');
+        const resultImg = document.getElementById('resultImage');
+        const placeholder = document.getElementById('resultPlaceholder');
+        const statsBtn = document.getElementById('viewStatsBtn');
+        
+        btn.disabled = true; 
+        loader.style.display = 'flex';
+        resultImg.style.display = 'none';
+        placeholder.style.display = 'none';
+        statsBtn.disabled = true;
+        
+        const w = Math.max(1, Math.round(selection.rect.w));
+        const h = Math.max(1, Math.round(selection.rect.h));
+        const usePalette = document.getElementById('usePaletteCheckbox').checked;
+        const targetK = document.getElementById('targetKInput').value;
+        const palette = JSON.stringify(getPalette());
+        
+        const getFD = (size) => {
+            const fd = new FormData();
+            fd.append('file', document.getElementById('imageInput').files[0]);
+            fd.append('cell_width', w); fd.append('cell_height', h);
+            fd.append('cell_size', size); fd.append('use_palette', usePalette);
+            fd.append('target_k', targetK); fd.append('palette', palette);
+            return fd;
+        };
+
+        try {
+            const r1 = await fetch('/process-image', {method:'POST', body:getFD(1)});
+            if (!r1.ok) throw new Error("Lỗi server");
+            const b1 = await r1.blob();
+            const u1 = URL.createObjectURL(b1);
+            
+            resultImg.onload = () => {
+                loader.style.display = 'none';
+                resultImg.style.display = 'block';
+                btn.disabled = false;
+                document.getElementById('statusVal').innerText = "Hoàn tất";
+                
+                const dlFull = document.getElementById('dlFullBtn');
+                const dlPx = document.getElementById('dlPxBtn');
+                dlPx.disabled = false;
+                dlFull.disabled = false;
+                
+                dlPx.onclick = () => { const a = document.createElement('a'); a.href = u1; a.download = 'pixel_art.png'; a.click(); };
+                
+                fetch('/process-image', {method:'POST', body:getFD(Math.max(w,h))})
+                    .then(r=>r.blob()).then(b=>{
+                        const uFull = URL.createObjectURL(b);
+                        dlFull.onclick = () => { const a = document.createElement('a'); a.href = uFull; a.download = 'pixel_art_full.png'; a.click(); };
+                    });
+            };
+            resultImg.src = u1;
+
+            if (usePalette) {
+                const resStats = await fetch('/get-color-stats', {method:'POST', body:getFD(1)});
+                const stats = await resStats.json();
+                renderStats(stats);
+                statsBtn.disabled = false;
+            }
+            
+        } catch(e) {
+            alert(e);
+            loader.style.display = 'none';
+            placeholder.style.display = 'block';
+            btn.disabled = false;
+        }
+    }
+
+    function renderStats(stats) {
+        document.getElementById('totalPixels').innerText = stats.total_pixels.toLocaleString();
+        document.getElementById('uniqueColors').innerText = stats.unique_colors;
+        
+        const tableContainer = document.getElementById('colorStatsTableContainer');
+        let html = `
+            <table>
+                <thead>
+                    <tr>
+                        <th>Màu</th>
+                        <th>Hex</th>
+                        <th style="text-align: right;">Pixel</th>
+                        <th style="text-align: right;">%</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        stats.color_stats.forEach((c, i) => {
+            const bg = i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent';
+            html += `
+                <tr style="background: ${bg};">
+                    <td><span class="color-dot" style="background-color: ${c.hex};"></span></td>
+                    <td style="color: #00ECFE; font-family: monospace;">${c.hex}</td>
+                    <td style="text-align: right;">${c.count.toLocaleString()}</td>
+                    <td style="text-align: right;">${c.percentage}%</td>
+                </tr>
+            `;
+        });
+        
+        html += '</tbody></table>';
+        tableContainer.innerHTML = html;
+    }
+    
+</script>
+</body>
+</html>
